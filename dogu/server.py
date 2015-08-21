@@ -8,7 +8,8 @@ from threading import Thread
 from gevent.queue import Queue
 from gevent import spawn
 from gevent import monkey
-from dogu.parse_http import parse_http1, parse_stream
+from dogu.connection import HTTPConnection
+
 import ssl
 
 
@@ -72,7 +73,7 @@ class Server(Thread):
             if conn is None:
                 continue
 
-            self.connection_queue.put(conn)
+            self.connection_queue.put((conn, addr))
 
     def create_workers(self):
         self.connection_queue = Queue()
@@ -82,21 +83,30 @@ class Server(Thread):
 
     def process_tcp_connection(self):
         while True:
-            is_connection_http2 = False
-            tcp_connection = self.connection_queue.get()
+            is_http2 = False
+
+            tcp_connection, remote_addr = self.connection_queue.get()
 
             rfile = tcp_connection.makefile('rb', self.setting['input_buffer_size'])
 
-            # wfile = tcp_connection.makefile('wb', self.output_buffer_size)
+            wfile = tcp_connection.makefile('wb', self.setting['output_buffer_size'])
 
             preface = rfile.peek(PREFACE_SIZE)
 
-            is_connection_http2 = (preface[0:PREFACE_SIZE] == PREFACE_CODE)
+            is_http2 = (preface[0:PREFACE_SIZE] == PREFACE_CODE)
 
-            if is_connection_http2:
-                parse_stream(rfile)
+            if is_http2:
+                rfile.read(PREFACE_SIZE)  # read left
+
+            connection = HTTPConnection(is_http2, self.server_setting, rfile, wfile)
+
+            if not self.server_setting['debug']:
+                try:
+                    connection.run()
+                except:
+                    pass  # TODO : stack error log
             else:
-                print(parse_http1(rfile))
+                connection.run()
 
 
 def set_server(
@@ -112,7 +122,8 @@ def set_server(
         keep_alive_timeout=45,
         use_ssl=False,
         crt_file="",
-        key_file=""):
+        key_file="",
+        debug=False):
     """
     This function is wrapping dogu interface application to run with specific settings
     """
@@ -137,6 +148,7 @@ def set_server(
     server_setting["key_file"] = key_file
 
     server_setting['app'] = app
+    server_setting['debug'] = debug
 
     return server_setting
 
