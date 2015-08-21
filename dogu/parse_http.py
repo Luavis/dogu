@@ -1,8 +1,11 @@
 """
-    dogu.server
+    dogu.parse_http
     ~~~~~~~
 
 """
+from struct import unpack
+from dogu.stream import Stream
+from hpack.hpack import Encoder, Decoder
 
 
 def parse_http1(rfile):
@@ -13,10 +16,10 @@ def parse_http1(rfile):
     http_version = 'HTTP/0.9'
 
     if len(raw_requestline) > 65536:
-        return None  # end request line
+        return None , True # end request line
 
     if not raw_requestline:
-        return None
+        return None, True
 
     print(raw_requestline)
     requestline = raw_requestline.rstrip('\r\n')
@@ -39,15 +42,15 @@ def parse_http1(rfile):
         #   - Leading zeros MUST be ignored by recipients.
 
         if len(version_number) != 2:
-            return None
+            return None, True
 
     elif len(words) == 2:
         command, path = words
 
         if not command == 'GET':
-            return None
+            return None, True
     else:
-        return None
+        return None, True
 
     header_size = len(requestline)
     headers = list()
@@ -62,7 +65,7 @@ def parse_http1(rfile):
 
         if not header_line.lstrip() == header_line:
             if not len(headers) == 0:
-                return None
+                return None, True
 
             headers[-1][1] = header_line.lstrip()
 
@@ -70,8 +73,62 @@ def parse_http1(rfile):
 
         headers.append(tuple(header_words.lstrip() for header_words in header_line.split(':')))
 
-    return (command, path, http_version, headers)
+    return (command, path, http_version, headers), False
 
 
-def parse_stream(rfile):
-    return None
+def parse_data_frame(frame_header, payload):
+    length, type_id, flag, stream_id = frame_header
+    flags = dict()
+
+    if type_id & 1:
+        flags['end_stream'] = True
+    else:
+        flags['end_stream'] = False
+
+    if type_id & 8:
+        pad_length = ord(payload[0])
+        (data, ) = unpack('x' + str(length - pad_length - 1) + 'p' + str(pad_length) + 'x', payload)
+
+        return (flags, data)
+    else:
+        return (flags, payload)
+
+
+def parse_http2(rfile, stream_dict):
+    while True:
+        raw_frame_header = rfile.read(9)
+
+        length_1, length_left, frame_type_id, flag, stream_id = unpack('!BHBBL', raw_frame_header)
+        length = length_1 * 16 * 16 + length_left
+
+        frame_type = 'DATA'
+
+        try:
+            frame_type = [
+                'DATA',
+                'HEADERS',
+                'PRIORITY',
+                'RST_STREAM',
+                'SETTINGS',
+                'PUSH_PROMISE',
+                'PING',
+                'GOAWAY',
+                'WINDOW_UPDATE',
+                'CONTINUATION'
+            ].index(frame_type_id)
+        except ValueError:
+            continue  # ignore unknown frame
+
+        raw_frame_payload = rfile.read(length)
+
+        if stream_dict.get(stream_id) is None:
+            stream_dict[stream_id] = Stream(stream_id, Encoder(), Decoder())
+
+        target_stream = stream_dict[stream_id]
+
+        target_stream.recv_frame((length, frame_type_id, flag, stream_id), raw_frame_header + raw_frame_payload)
+
+        if target_stream.is_wait_res:
+            return target_stream.request_context, False
+        else:
+            return None, False
