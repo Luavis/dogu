@@ -5,15 +5,17 @@
 """
 import socket
 from threading import Thread
+from gevent.queue import Queue
+from gevent import spawn
+from gevent import monkey
+from dogu.parse_http import parse_http1, parse_stream
 import ssl
 
-try:  # for py3
-    from queue import Queue
-except ImportError:  # for py2
-    import Queue
 
 PREFACE_CODE = b"\x50\x52\x49\x20\x2a\x20\x48\x54\x54\x50\x2f\x32\x2e\x30\x0d\x0a\x0d\x0a\x53\x4d\x0d\x0a\x0d\x0a"
 PREFACE_SIZE = len(PREFACE_CODE)
+
+monkey.patch_socket()
 
 
 class Server(Thread):
@@ -26,6 +28,7 @@ class Server(Thread):
         self.host = setting['host']
         self.port = setting['port']
         self.use_ssl = setting['use_ssl']
+        self.setting = setting
 
         # create app list
 
@@ -35,10 +38,6 @@ class Server(Thread):
         self.app_list['server_name'] = app
 
     def run(self):
-
-        # override
-        Thread.run(self)
-
         if self.use_ssl:
             # TODO: it will not work in below 2.7.9 and 3.2
             ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
@@ -58,7 +57,11 @@ class Server(Thread):
         else:
             self.listen_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
+        self.listen_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
         self.listen_sock.bind((self.host, self.port))
+
+        self.listen_sock.listen(5)
 
         # create workers which process connections
         self.create_workers()
@@ -75,24 +78,25 @@ class Server(Thread):
         self.connection_queue = Queue()
 
         for i in range(self.setting['threads']):
-            t = Thread(target=self.process_connection)
-            t.daemon = True
-            t.start()
+            spawn(self.process_tcp_connection)
 
-    def process_connection(self):
+    def process_tcp_connection(self):
         while True:
             is_connection_http2 = False
+            tcp_connection = self.connection_queue.get()
 
-            rfile = self.connection.makefile('rb', self.input_buffer_size)
+            rfile = tcp_connection.makefile('rb', self.setting['input_buffer_size'])
 
-            wfile = self.connection.makefile('rb', self.output_buffer_size)
+            # wfile = tcp_connection.makefile('wb', self.output_buffer_size)
 
             preface = rfile.peek(PREFACE_SIZE)
 
             is_connection_http2 = (preface[0:PREFACE_SIZE] == PREFACE_CODE)
 
             if is_connection_http2:
-                pass
+                parse_stream(rfile)
+            else:
+                print(parse_http1(rfile))
 
 
 def set_server(
@@ -132,20 +136,27 @@ def set_server(
     server_setting["crt_file"] = crt_file
     server_setting["key_file"] = key_file
 
+    server_setting['app'] = app
+
     return server_setting
 
 
-def start(apps):
+def start(server_settings):
 
     server_list = dict()
 
-    for app in apps:
-        server = server_list.get(app['host'] + ':' + str(app['port']))
+    for server_setting in server_settings:
+
+        server_name = server_setting['host'] + ':' + str(server_setting['port'])
+
+        server = server_list.get(server_name)
 
         if server is None:
-            server_list.set(app['host'] + ':' + str(app['port']), Server(app['host'], app['port']))
+            server_list[server_name] = Server(
+                server_setting
+            )
 
-        server_list.register(app)
+        server_list[server_name].register(server_name, server_setting['app'])
 
-    for server in server_list:
+    for server_name, server in server_list.items():
         server.run()
