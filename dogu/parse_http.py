@@ -93,6 +93,45 @@ def parse_data_frame(frame_header, payload):
     else:
         return (flags, payload)
 
+def parse_header_frame(frame_header, payload):
+    length, type_id, flag, stream_id = frame_header
+    flags = dict()
+
+    is_pad = (type_id & 8) is not 0
+    is_priority = (type_id & 0x20) is not 0
+    if is_pad:
+        pad_length = ord(payload[0])
+    else:
+        pad_length = 0
+
+    if type_id & 1:
+        flags['end_stream'] = True
+    else:
+        flags['end_stream'] = False
+
+    if type_id & 4:
+        flags['end_headers'] = True
+    else:
+        flags['end_headers'] = False
+
+    if is_priority:
+        frm = str(int(is_pad)) + 'x'
+        + 'IB'
+        + str(length - pad_length - 1) + 'p'
+        + str(pad_length) + 'x'
+
+        (dep_id, weight, header_frag, ) = unpack(frm, payload)
+
+        flags['is_exclusive'] = dep_id & 0x80000000 is not 0
+        flags['dep_id'] = dep_id & 0x7FFFFFFF
+    else:
+        frm = str(int(is_pad)) + 'x'
+        + str(length - pad_length - 1) + 'p'
+        + str(pad_length) + 'x'
+
+        (header_frag, ) = unpack(frm, payload)
+
+    return (flags, header_frag)
 
 def parse_http2(rfile, stream_dict):
     while True:
