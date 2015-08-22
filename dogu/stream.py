@@ -3,14 +3,17 @@
     ~~~~~~~
 
 """
-from dogu.frame import Frame
+
+from dogu.http_erros import ProtocolError
+
 
 class Stream(object):
 
-    def __init__(self, stream_id, hpack):
+    def __init__(self, stream_id):
         self.stream_id = stream_id
         self.state = 'idle'
-        (self.encoder, self.decoder) = hpack
+        self.recv_end_header = False
+        self.recv_headers = []
 
     @property
     def is_wait_res(self):
@@ -20,10 +23,23 @@ class Stream(object):
     def request_context(self):
         return None
 
-    def recv_frame(self, frame_header, raw_frame):
-        frame = Frame.load(frame_header, raw_frame)
+    def recv_header(self, headers):
+        if self.recv_end_header is True:
+            raise ProtocolError('header is already end')
 
-        if frame is None:  # unsupport frame
-            return None
+        if self.state is 'idle':
+            self.state = 'open'  # stream opened
+        elif self.state is not 'open':
+            raise ProtocolError('stream is not opened')
 
-        
+        self.recv_headers.extend(headers)
+
+    def recv_data(self):
+        pass
+
+    def end_header(self):
+        self.recv_end_header = True
+
+    def end_stream(self):
+        if self.state == 'open':
+            self.state = 'half-closed(remote)'
