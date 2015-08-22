@@ -5,7 +5,6 @@
 """
 from struct import unpack
 from dogu.stream import Stream
-from hpack.hpack import Encoder, Decoder
 
 
 def parse_http1(rfile):
@@ -16,7 +15,7 @@ def parse_http1(rfile):
     http_version = 'HTTP/0.9'
 
     if len(raw_requestline) > 65536:
-        return None , True # end request line
+        return None, True  # end request line
 
     if not raw_requestline:
         return None, True
@@ -76,6 +75,61 @@ def parse_http1(rfile):
     return (command, path, http_version, headers), False
 
 
+def parse_http2(rfile, stream_dict, encoder, decoder):
+    while True:
+        raw_frame_header = rfile.read(9)
+
+        length_1, length_left, type_id, flag, stream_id = unpack('!BHBBL', raw_frame_header)
+        length = length_1 * 16 * 16 + length_left
+
+        frame_type = 'DATA'
+
+        try:
+            frame_type = [
+                'DATA',
+                'HEADERS',
+                'PRIORITY',
+                'RST_STREAM',
+                'SETTINGS',
+                'PUSH_PROMISE',
+                'PING',
+                'GOAWAY',
+                'WINDOW_UPDATE',
+                'CONTINUATION'
+            ].index(type_id)
+        except ValueError:
+            continue  # ignore unknown frame
+
+        if stream_dict.get(stream_id) is None:
+            stream_dict[stream_id] = Stream(stream_id, )
+
+        target_stream = stream_dict[stream_id]
+
+        # set frame header
+        frame_header = (length, type_id, flag, stream_id)
+
+        # read left frame payload
+        payload = rfile.read(length)
+
+        if type_id == 0:
+            (options, data) = parse_data_frame(frame_header, payload)
+            target_stream.recv_data(encoder.encode(data))
+        elif type_id == 1:
+            (options, data) = parse_header_frame(frame_header, payload)
+            target_stream.recv_header(encoder.encode(data))
+
+        if options.get('end_headers') is True:
+            target_stream.end_stream()
+
+        if options.get('end_stream') is True:
+            target_stream.end_stream()
+
+        if target_stream.is_wait_res:
+            return target_stream.request_context, False
+        else:
+            return None, False
+
+
 def parse_data_frame(frame_header, payload):
     length, type_id, flag, stream_id = frame_header
     flags = dict()
@@ -132,42 +186,3 @@ def parse_header_frame(frame_header, payload):
         (header_frag, ) = unpack(frm, payload)
 
     return (flags, header_frag)
-
-def parse_http2(rfile, stream_dict):
-    while True:
-        raw_frame_header = rfile.read(9)
-
-        length_1, length_left, frame_type_id, flag, stream_id = unpack('!BHBBL', raw_frame_header)
-        length = length_1 * 16 * 16 + length_left
-
-        frame_type = 'DATA'
-
-        try:
-            frame_type = [
-                'DATA',
-                'HEADERS',
-                'PRIORITY',
-                'RST_STREAM',
-                'SETTINGS',
-                'PUSH_PROMISE',
-                'PING',
-                'GOAWAY',
-                'WINDOW_UPDATE',
-                'CONTINUATION'
-            ].index(frame_type_id)
-        except ValueError:
-            continue  # ignore unknown frame
-
-        raw_frame_payload = rfile.read(length)
-
-        if stream_dict.get(stream_id) is None:
-            stream_dict[stream_id] = Stream(stream_id, Encoder(), Decoder())
-
-        target_stream = stream_dict[stream_id]
-
-        target_stream.recv_frame((length, frame_type_id, flag, stream_id), raw_frame_header + raw_frame_payload)
-
-        if target_stream.is_wait_res:
-            return target_stream.request_context, False
-        else:
-            return None, False
