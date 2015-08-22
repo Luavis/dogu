@@ -20,7 +20,6 @@ def parse_http1(rfile):
     if not raw_requestline:
         return None, True
 
-    print(raw_requestline)
     requestline = raw_requestline.rstrip('\r\n')
 
     words = requestline.split()
@@ -70,7 +69,7 @@ def parse_http1(rfile):
 
             continue
 
-        headers.append(tuple(header_words.lstrip() for header_words in header_line.split(':')))
+        headers.append(tuple(header_words.lstrip() for header_words in header_line.split(':', 1)))
 
     return (command, path, http_version, headers), False
 

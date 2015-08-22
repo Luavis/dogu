@@ -4,7 +4,7 @@
 
 """
 
-from dogu.http_erros import ProtocolError
+from dogu.http2_errors import ProtocolError
 
 
 class Stream(object):

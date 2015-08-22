@@ -13,7 +13,8 @@ from dogu.connection import HTTPConnection
 import ssl
 
 
-PREFACE_CODE = b"\x50\x52\x49\x20\x2a\x20\x48\x54\x54\x50\x2f\x32\x2e\x30\x0d\x0a\x0d\x0a\x53\x4d\x0d\x0a\x0d\x0a"
+PREFACE_CODE = b'\x50\x52\x49\x20\x2a\x20\x48\x54\x54\x50\x2f\x32\x2e\x30\x0d\x0a\x0d\x0a\x53\x4d\x0d\x0a\x0d\x0a'
+
 PREFACE_SIZE = len(PREFACE_CODE)
 
 monkey.patch_socket()
@@ -36,7 +37,7 @@ class Server(Thread):
         self.app_list = dict()
 
     def register(self, server_name, app):
-        self.app_list['server_name'] = app
+        self.app_list[server_name] = app
 
     def run(self):
         if self.use_ssl:
@@ -98,9 +99,16 @@ class Server(Thread):
             if is_http2:
                 rfile.read(PREFACE_SIZE)  # read left
 
-            connection = HTTPConnection(is_http2, remote_addr, self.server_setting, rfile, wfile)
+            connection = HTTPConnection(
+                is_http2,
+                remote_addr,
+                self.setting,
+                self.app_list,
+                rfile,
+                wfile
+            )
 
-            if not self.server_setting['debug']:
+            if not self.setting['debug']:
                 try:
                     connection.run()
                 except:
@@ -112,7 +120,7 @@ class Server(Thread):
 def set_server(
         host='127.0.0.1',
         port=2043,
-        server_name='',
+        server_name='default',
         app=None,
         threads=1,
         process=1,
@@ -125,7 +133,8 @@ def set_server(
         key_file="",
         debug=False):
     """
-    This function is wrapping dogu interface application to run with specific settings
+    This function is wrapping dogu interface application
+    to run with specific settings
     """
     if app is None:
         raise ValueError()
@@ -135,17 +144,18 @@ def set_server(
 
     server_setting = dict()
 
-    server_setting["host"] = host
-    server_setting["port"] = port
-    server_setting["threads"] = threads
-    server_setting["process"] = process
-    server_setting["input_buffer_size"] = input_buffer_size
-    server_setting["output_buffer_size"] = output_buffer_size
-    server_setting["keep_alive"] = keep_alive
-    server_setting["keep_alive_timeout"] = keep_alive_timeout
-    server_setting["use_ssl"] = use_ssl
-    server_setting["crt_file"] = crt_file
-    server_setting["key_file"] = key_file
+    server_setting['host'] = host
+    server_setting['port'] = port
+    server_setting['server_name'] = server_name
+    server_setting['threads'] = threads
+    server_setting['process'] = process
+    server_setting['input_buffer_size'] = input_buffer_size
+    server_setting['output_buffer_size'] = output_buffer_size
+    server_setting['keep_alive'] = keep_alive
+    server_setting['keep_alive_timeout'] = keep_alive_timeout
+    server_setting['use_ssl'] = use_ssl
+    server_setting['crt_file'] = crt_file
+    server_setting['key_file'] = key_file
 
     server_setting['app'] = app
     server_setting['debug'] = debug
@@ -159,16 +169,19 @@ def start(server_settings):
 
     for server_setting in server_settings:
 
-        server_name = server_setting['host'] + ':' + str(server_setting['port'])
+        server_id = server_setting['host'] + ':' + str(server_setting['port'])
 
-        server = server_list.get(server_name)
+        server = server_list.get(server_id)
 
         if server is None:
-            server_list[server_name] = Server(
+            server_list[server_id] = Server(
                 server_setting
             )
 
-        server_list[server_name].register(server_name, server_setting['app'])
+        server_list[server_id].register(
+            server_setting['server_name'],
+            server_setting['app']
+        )
 
     for server_name, server in server_list.items():
         server.run()
