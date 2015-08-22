@@ -98,7 +98,7 @@ class Server(Thread):
             if is_http2:
                 rfile.read(PREFACE_SIZE)  # read left
 
-            connection = HTTPConnection(is_http2, self.server_setting, rfile, wfile)
+            connection = HTTPConnection(is_http2, remote_addr, self.server_setting, rfile, wfile)
 
             if not self.server_setting['debug']:
                 try:
