@@ -29,6 +29,7 @@ def install():
         packages=find_packages(),
         install_requires=[
             'pytest==2.7.2',
+            'gevent==1.1b3',
         ],
     )
 
