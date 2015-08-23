@@ -17,7 +17,7 @@ PREFACE_CODE = b'\x50\x52\x49\x20\x2a\x20\x48\x54\x54\x50\x2f\x32\x2e\x30\x0d\x0
 
 PREFACE_SIZE = len(PREFACE_CODE)
 
-monkey.patch_socket()
+monkey.patch_all()
 
 
 class Server(Thread):
