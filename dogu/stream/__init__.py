@@ -83,10 +83,10 @@ class Stream(object):
         else:
             environ['CONTENT_TYPE'] = ''
 
-        environ['HTTP_METHOD'] = command
+        environ['REQUEST_METHOD'] = command
         environ['PROTOCOL_VERSION'] = http_version
         environ['SERVER_NAME'] = self.conn.server_setting['host']
-        environ['SERVER_PORT'] = self.conn.server_setting['port']
+        environ['SERVER_PORT'] = str(self.conn.server_setting['port'])
         environ['SCRIPT_NAME'] = ''
 
         split_path = path.split('?')
@@ -107,7 +107,7 @@ class Stream(object):
         environ['wsgi.run_once'] = False
         environ['wsgi.url_scheme'] = 'https' if self.conn.use_ssl else 'http'
 
-        environ['dogu.version'] = (1, 0)
+        # environ['dogu.version'] = (1, 0)
 
         # TODO : push handler is None temporarily
         environ['dogu.push'] = None

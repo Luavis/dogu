@@ -88,6 +88,7 @@ class Server(Thread):
             is_http2 = False
 
             tcp_connection, remote_addr = self.connection_queue.get()
+
             tcp_connection.settimeout(self.setting['keep_alive_timeout'])
 
             rfile = tcp_connection.makefile('rb', self.setting['input_buffer_size'])
@@ -100,7 +101,7 @@ class Server(Thread):
                 self.close_connection(tcp_connection)
                 continue  # close connection
 
-            is_http2 = (preface[0:PREFACE_SIZE] == PREFACE_CODE)
+            is_http2 = (preface[:PREFACE_SIZE] == PREFACE_CODE)
 
             if is_http2:
                 rfile.read(PREFACE_SIZE)  # clean buffer

@@ -41,9 +41,10 @@ class StreamHTTP1(Stream):
     def write(self, data):
         self.conn.write(data)
 
-    def flush_data(self, data):
-        if data is not None:
-            self.conn.write(data)
+    def flush_data(self, results):
+        if results is not None:
+            for result in results:
+                self.conn.write(result)
 
         self.conn.flush()
 

@@ -75,9 +75,12 @@ class StreamHTTP2(Stream):
         self.conn.write(h_frame.get_frame_bin())
         self.conn.flush()
 
-    def flush_data(self, data):
-        data_frame = DataFrame(self.stream_id, end_stream=True)
-        self.conn.write(data_frame.get_frame_bin())
+    def flush_data(self, results):
+        if results is not None:
+            for result in results:
+                self.write(result)
+
+        self.write(b'', end_stream=True)
 
         self.conn.flush()
         self.state = 'closed'
@@ -110,8 +113,8 @@ class StreamHTTP2(Stream):
 
         return True
 
-    def write(self, data):
-        data_frame = DataFrame(self.stream_id)
+    def write(self, data, end_stream=False):
+        data_frame = DataFrame(self.stream_id, end_stream)
         data_frame.data = data
 
         self.conn.write(data_frame.get_frame_bin())
