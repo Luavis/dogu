@@ -6,16 +6,16 @@
 import socket
 from threading import Thread
 from gevent.queue import Queue
-from gevent import Timeout
 from gevent import spawn
 from gevent import monkey
 from dogu.connection.http1 import HTTP1Connection
+from dogu.connection.http2 import HTTP2Connection
 
 import ssl
 
 
 PREFACE_CODE = b'\x50\x52\x49\x20\x2a\x20\x48\x54\x54\x50\x2f\x32\x2e\x30\x0d\x0a\x0d\x0a\x53\x4d\x0d\x0a\x0d\x0a'
-
+SERVER_PREFACE = b'\x00\x00\x00\x04\x01\x00\x00\x00\x00'
 PREFACE_SIZE = len(PREFACE_CODE)
 
 monkey.patch_all()
@@ -104,33 +104,51 @@ class Server(Thread):
 
             if is_http2:
                 rfile.read(PREFACE_SIZE)  # clean buffer
+                wfile.write(SERVER_PREFACE)
 
-            connection = HTTP1Connection(
-                is_http2,
-                remote_addr,
-                self.setting,
-                self.app_list,
-                rfile,
-                wfile
-            )
+                connection = HTTP2Connection(
+                    is_http2,
+                    remote_addr,
+                    self.setting,
+                    self.app_list,
+                    rfile,
+                    wfile
+                )
+            else:
+                connection = HTTP1Connection(
+                    is_http2,
+                    remote_addr,
+                    self.setting,
+                    self.app_list,
+                    rfile,
+                    wfile
+                )
 
             if not self.setting['debug']:
                 try:
                     connection.run()
                 except socket.timeout:
-                    pass  # end stream
+                    pass
+                except ssl.SSLError:
+                    pass
                 except:
                     pass  # TODO : stack error log
             else:
                 try:
                     connection.run()
+                except ssl.SSLError:
+                    pass
                 except socket.timeout:
-                    self.close_connection(tcp_connection)
-                    continue  # end stream
+                    pass
+
+            self.close_connection(tcp_connection)  # close connection
 
     def close_connection(self, tcp_connection):
-        tcp_connection.shutdown(socket.SHUT_RDWR)
-        tcp_connection.close()
+        try:
+            tcp_connection.shutdown(socket.SHUT_RDWR)
+            tcp_connection.close()
+        except OSError:  # if already closed just pass it
+            pass
 
 def set_server(
         host='127.0.0.1',

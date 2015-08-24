@@ -26,7 +26,7 @@ class PriorityFrame(Frame):
         if frm_type is not FrameType.PRIORITY:
             raise ValueError("frame is not type of PRIORITY type")
 
-        start_index = 9  # default is payload stat index
+        start_index = 0  # default is payload stat index
 
         dep_stream_id = frame[start_index] << 24
         dep_stream_id += frame[start_index + 1] << 16

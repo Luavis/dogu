@@ -8,22 +8,19 @@ try:
     from urllib.parse import quote
 except ImportError:
     from urllib import quote
-
+from gevent import spawn
 
 class Stream(object):
 
-    def __init__(self, conn, scheme='http', stream_id=0):
+    def __init__(self, conn, stream_id=0):
         self.conn = conn
         self.stream_id = stream_id
         self.state = 'idle'
-        self.scheme = scheme
 
         # recv data
         self.recv_end_header = False
-        self.recv_headers = []
+        self.recv_headers = list()
         self.authority = None
-        self.method = 'GET'
-        self.path = '/'
 
         # send data
         self.code = ''
@@ -71,7 +68,8 @@ class Stream(object):
         environ['REMOTE_ADDR'] = self.conn.remote_addr
 
         for (name, value) in headers:
-            environ['HTTP_' + name.upper().replace('-', '_')] = value
+            if not name[0] == ':':  # filter psedo header
+                environ['HTTP_' + name.upper().replace('-', '_')] = value
 
         if environ.get('HTTP_CONTENT_LENGTH'):
             environ['CONTENT_LENGTH'] = environ['HTTP_CONTENT_LENGTH']
@@ -117,6 +115,9 @@ class Stream(object):
 
         app = self.conn.get_app_with_host(self.authority if self.authority is not None else environ.get('HTTP_HOST'))
 
+        spawn(self.run_app, app, environ)
+
+    def run_app(self, app, environ):
         data = app(environ, self.start_response)
 
         self.flush_data(data)

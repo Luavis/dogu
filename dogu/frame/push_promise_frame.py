@@ -13,8 +13,8 @@
 
 from dogu.frame import (Frame, FrameType)
 from dogu.util import int_to_bytes
-from dogu.hpack.hpack import (Encoder, Decoder)
 from dogu.http2_exception import ProtocolError
+from hpack.hpack import (Encoder, Decoder)
 
 
 class PushPromiseFrame(Frame):
@@ -41,7 +41,7 @@ class PushPromiseFrame(Frame):
 
         end_header = False
 
-        header_start_index = 9  # default is payload stat index
+        header_start_index = 0  # default is payload stat index
         header_pad_length = 0
 
         if frm_flag & PushPromiseFrame.END_HEADER_FLAG is not 0:
@@ -134,8 +134,6 @@ class PushPromiseFrame(Frame):
         headers_frame_field += int_to_bytes(self.promised_stream_id, 4)  # append promised stream id
 
         self._data = headers_frame_field + self._data  # append HEADERS field
-
-        print('push promise data', Frame.get_frame_bin(self))
 
         return Frame.get_frame_bin(self)
 

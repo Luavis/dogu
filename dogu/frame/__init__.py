@@ -79,7 +79,7 @@ class Frame(object):
 
         # check frame length match real size
 
-        if not frm_len + 9 == len(frame):
+        if not frm_len == len(frame):
             raise FrameSizeError()
 
         if frm_type == FrameType.DATA:

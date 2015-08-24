@@ -1,5 +1,5 @@
 """
-    dogu.stream
+    dogu.http1.connection
     ~~~~~~~
 
 """
@@ -13,15 +13,18 @@ class StreamHTTP1(Stream):
     DEFAULT_ENCODING_TYPE = 'iso-8859-1'
     EOL_MARKER = '\r\n'.encode('iso-8859-1')
 
-    def __init__(self, conn, scheme='http', stream_id=0):
-        Stream.__init__(self, conn, scheme, stream_id)
+    def __init__(self, conn, stream_id=0):
+        Stream.__init__(self, conn, stream_id)
 
     def send_response(self, code, message=None):
         self.code = code
         self.message = message
 
         self.conn.wfile.write(
-            (self.http_version + ' ' + code + ' ' + message).encode(StreamHTTP1.DEFAULT_ENCODING_TYPE))
+            (self.http_version + ' ' + code + ' ' + message).encode(
+                StreamHTTP1.DEFAULT_ENCODING_TYPE
+            )
+        )
 
         self.conn.wfile.write(StreamHTTP1.EOL_MARKER)
 
