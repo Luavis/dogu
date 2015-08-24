@@ -25,6 +25,7 @@ class Stream(object):
         # send data
         self.code = ''
         self.message = ''
+        self.push_enabled = False
 
     def send_response(self, code, message=None):
         self.code = code
@@ -91,11 +92,11 @@ class Stream(object):
 
         split_path = path.split('?')
 
-        environ['RAW_QUERY_STRING'] = split_path[0]
-        environ['RAW_PATH_INFO'] = split_path[1] if len(split_path) > 1 else ''
+        environ['RAW_PATH_INFO'] = split_path[0]
+        environ['RAW_QUERY_STRING'] = split_path[1] if len(split_path) > 1 else ''
 
-        environ['QUERY_STRING'] = quote(environ['RAW_QUERY_STRING'])
         environ['PATH_INFO'] = quote(environ['RAW_PATH_INFO'])
+        environ['QUERY_STRING'] = quote(environ['RAW_QUERY_STRING'])
 
         environ['wsgi.input'] = input_stream
 
@@ -110,8 +111,8 @@ class Stream(object):
         # environ['dogu.version'] = (1, 0)
 
         # TODO : push handler is None temporarily
-        environ['dogu.push'] = None
-        environ['dogu.push_enabled'] = True
+        environ['dogu.push'] = self.push
+        environ['dogu.push_enabled'] = self.push_enabled
 
         app = self.conn.get_app_with_host(self.authority if self.authority is not None else environ.get('HTTP_HOST'))
 

@@ -63,7 +63,8 @@ class HTTP2Connection(HTTPConnection):
 
         if stream is not None:
             if stream.is_closed:
-                raise StreamClosedError()  # if closed stream raise exception
+                pass
+                # raise StreamClosedError()  # if closed stream raise exception
         else:
             if StreamHTTP2.is_server_stream_id(stream_id):
                 stream = self.create_stream()

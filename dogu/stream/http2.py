@@ -7,6 +7,7 @@ from dogu.stream import Stream
 from dogu.frame import Frame
 from dogu.frame.data_frame import DataFrame
 from dogu.frame.header_frame import HeaderFrame
+from dogu.frame.push_promise_frame import PushPromiseFrame
 from dogu.data_frame_io import DataFrameIO
 from dogu.http2_exception import ProtocolError
 from gevent import spawn
@@ -23,6 +24,7 @@ class StreamHTTP2(Stream):
         self.send_headers = list()
         self.request_payload_stream = DataFrameIO()
         self.sending = False
+        self.push_enabled = True  # default push is enabled
 
     def send_response(self, code, message=None):
         Stream.send_response(self, code, message)
@@ -53,7 +55,7 @@ class StreamHTTP2(Stream):
             if header[0] == ':scheme':
                 return header[1]
 
-        raise ProtocolError('No method in request')
+        raise ProtocolError('No scheme in request')
 
     @property
     def path(self):
@@ -138,6 +140,44 @@ class StreamHTTP2(Stream):
 
             if frame.is_end_stream:
                 self.end_stream()
+
+    def promise(self, push_headers):
+        self.state = 'reserved(local)'
+
+        self.recv_headers.extend(push_headers)
+
+        self.run_with_dogu(  # run application
+            (
+                self.command,
+                self.path,
+                self.http_version,
+                self.recv_headers,
+            ),
+            self.request_payload_stream  # empty stream
+        )
+
+    def push(self, push_headers, app):
+
+        method = None
+        path = None
+
+        for (name, value) in push_headers:
+            if name == ':method':
+                method = value
+            elif name == ':path':
+                path = value
+
+        if method is None or path is None:
+            raise ValueError('Method or path must not be None')
+
+        push_promise = PushPromiseFrame(self.stream_id, push_headers)
+        push_stream = self.conn.create_stream()
+
+        push_promise.promised_stream_id = push_stream.stream_id
+
+        self.conn.write(push_promise.get_frame_bin())  # promise push
+
+        push_stream.promise(push_headers)
 
     def recv_header(self, headers):
         if self.recv_end_header is True:

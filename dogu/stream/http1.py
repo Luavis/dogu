@@ -15,6 +15,7 @@ class StreamHTTP1(Stream):
 
     def __init__(self, conn, stream_id=0):
         Stream.__init__(self, conn, stream_id)
+        self.push = None  # no push handler
 
     def send_response(self, code, message=None):
         self.code = code
