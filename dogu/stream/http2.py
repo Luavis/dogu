@@ -9,6 +9,7 @@ from dogu.frame.data_frame import DataFrame
 from dogu.frame.header_frame import HeaderFrame
 from dogu.data_frame_io import DataFrameIO
 from dogu.http2_exception import ProtocolError
+from gevent import spawn
 
 
 class StreamHTTP2(Stream):
@@ -74,6 +75,13 @@ class StreamHTTP2(Stream):
 
         self.conn.write(h_frame.get_frame_bin())
         self.conn.flush()
+
+    def run_app_in_spawn(self, app, environ):
+        data = app(environ, self.start_response)
+        self.flush_data(data)
+
+    def run_app(self, app, environ):
+        spawn(self.run_app_in_spawn, app, environ)
 
     def flush_data(self, results):
         if results is not None:

@@ -54,7 +54,6 @@ class StreamHTTP1(Stream):
         if request is not None:
             command, path, http_version, headers = request
             self.http_version = http_version  # get HTTP version in requset
-
             self.run_with_dogu(request, rfile)
         else:  # this case probably malformed request
             return False
@@ -63,6 +62,11 @@ class StreamHTTP1(Stream):
             return False
         else:
             return True
+
+    def run_app(self, app, environ):
+        data = app(environ, self.start_response)
+
+        self.flush_data(data)
 
     def parse_request(self, rfile):
         raw_requestline = rfile.readline(65537).decode('us-ascii')

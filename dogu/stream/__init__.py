@@ -115,9 +115,7 @@ class Stream(object):
 
         app = self.conn.get_app_with_host(self.authority if self.authority is not None else environ.get('HTTP_HOST'))
 
-        spawn(self.run_app, app, environ)
+        self.run_app(app, environ)
 
     def run_app(self, app, environ):
-        data = app(environ, self.start_response)
-
-        self.flush_data(data)
+        pass
