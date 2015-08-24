@@ -130,6 +130,9 @@ class StreamHTTP2(Stream):
     def recv_frame(self, frame):
         if isinstance(frame, DataFrame):
             self.recv_data(frame.data)
+
+            if frame.is_end_stream:
+                self.end_stream()
         elif isinstance(frame, HeaderFrame):
             self.recv_header(frame.get_all())
 
