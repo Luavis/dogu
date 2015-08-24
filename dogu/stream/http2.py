@@ -3,45 +3,34 @@
     ~~~~~~~
 
 """
-
-from dogu.http2_exception import ProtocolError
-from dogu.frame.header_frame import HeaderFrame
+from dogu.stream import Stream
 from dogu.frame.data_frame import DataFrame
+from dogu.frame.header_frame import HeaderFrame
+from dogu.data_frame_io import DataFrameIO
+from dogu.http2_exception import ProtocolError
 
-class Stream(object):
 
-    def __init__(self, stream_id):
-        self.stream_id = stream_id
-        self.state = 'idle'
-        self.recv_end_header = False
+class StreamHTTP2(Stream):
 
-        self.recv_headers = []
+    def __init__(self, conn, scheme='https', stream_id=0):
+        Stream.__init__(self, conn, scheme, stream_id)
+        self.input_stream = DataFrameIO()
 
     @property
     def is_wait_res(self):
         return self.state == 'half-closed(remote)'
 
-    @property
-    def request_context(self):
-        return None
+    def send_header(self, name, value):
+        pass
 
-# TODO: if property can not found it occur ProtocolError
+    def flush_header(self):
+        pass
 
-    @property
-    def command(self):
-        return self._command
+    def run_stream(self, rfile):
+        pass
 
-    @property
-    def path(self):
-        return self._path
-
-    @property
-    def authority(self):
-        return self._authority
-
-    @property
-    def scheme(self):
-        return self._scheme
+    def write(self, data):
+        pass
 
     def recv_frame(self, frame):
         if isinstance(frame, DataFrame):
@@ -70,7 +59,7 @@ class Stream(object):
         self.recv_headers.extend(headers)
 
     def recv_data(self, data):
-        pass
+        self.input_buffer.write(data)
 
     def end_header(self):
         self.recv_end_header = True

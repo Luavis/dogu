@@ -6,9 +6,10 @@
 import socket
 from threading import Thread
 from gevent.queue import Queue
+from gevent import Timeout
 from gevent import spawn
 from gevent import monkey
-from dogu.connection import HTTPConnection
+from dogu.connection.http1 import HTTP1Connection
 
 import ssl
 
@@ -79,7 +80,7 @@ class Server(Thread):
     def create_workers(self):
         self.connection_queue = Queue()
 
-        for i in range(self.setting['threads']):
+        for i in range(self.setting['workers']):
             spawn(self.process_tcp_connection)
 
     def process_tcp_connection(self):
@@ -87,19 +88,24 @@ class Server(Thread):
             is_http2 = False
 
             tcp_connection, remote_addr = self.connection_queue.get()
+            tcp_connection.settimeout(self.setting['keep_alive_timeout'])
 
             rfile = tcp_connection.makefile('rb', self.setting['input_buffer_size'])
 
             wfile = tcp_connection.makefile('wb', self.setting['output_buffer_size'])
 
-            preface = rfile.peek(PREFACE_SIZE)
+            try:
+                preface = rfile.peek(PREFACE_SIZE)
+            except socket.timeout:
+                self.close_connection(tcp_connection)
+                continue  # close connection
 
             is_http2 = (preface[0:PREFACE_SIZE] == PREFACE_CODE)
 
             if is_http2:
-                rfile.read(PREFACE_SIZE)  # read left
+                rfile.read(PREFACE_SIZE)  # clean buffer
 
-            connection = HTTPConnection(
+            connection = HTTP1Connection(
                 is_http2,
                 remote_addr,
                 self.setting,
@@ -111,23 +117,32 @@ class Server(Thread):
             if not self.setting['debug']:
                 try:
                     connection.run()
+                except socket.timeout:
+                    pass  # end stream
                 except:
                     pass  # TODO : stack error log
             else:
-                connection.run()
+                try:
+                    connection.run()
+                except socket.timeout:
+                    self.close_connection(tcp_connection)
+                    continue  # end stream
 
+    def close_connection(self, tcp_connection):
+        tcp_connection.shutdown(socket.SHUT_RDWR)
+        tcp_connection.close()
 
 def set_server(
         host='127.0.0.1',
         port=2043,
         server_name='default',
         app=None,
-        threads=1,
+        workers=1,
         process=1,
         input_buffer_size=1000,
         output_buffer_size=1000,
         keep_alive=True,
-        keep_alive_timeout=45,
+        keep_alive_timeout=10,
         use_ssl=False,
         crt_file="",
         key_file="",
@@ -147,7 +162,7 @@ def set_server(
     server_setting['host'] = host
     server_setting['port'] = port
     server_setting['server_name'] = server_name
-    server_setting['threads'] = threads
+    server_setting['workers'] = workers
     server_setting['process'] = process
     server_setting['input_buffer_size'] = input_buffer_size
     server_setting['output_buffer_size'] = output_buffer_size
