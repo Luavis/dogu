@@ -10,7 +10,7 @@
  +---------------------------------------------------------------+
 
 """
-from http2.errors import ProtocolError, FrameSizeError
+from dogu.http2_exception import ProtocolError, FrameSizeError
 
 
 class FrameType(object):
