@@ -7,7 +7,7 @@ from dogu.connection import HTTPConnection
 from hpack.hpack import Encoder, Decoder
 from dogu.stream.http2 import StreamHTTP2
 from dogu.http2_exception import StreamClosedError
-from dogu.frame import Frame
+from dogu.frame import Frame, FrameType
 
 class HTTP2Connection(HTTPConnection):
 
@@ -63,8 +63,7 @@ class HTTP2Connection(HTTPConnection):
 
         if stream is not None:
             if stream.is_closed:
-                pass
-                # raise StreamClosedError()  # if closed stream raise exception
+                raise StreamClosedError()  # if closed stream raise exception
         else:
             if StreamHTTP2.is_server_stream_id(stream_id):
                 stream = self.create_stream()
@@ -87,7 +86,14 @@ class HTTP2Connection(HTTPConnection):
             )
 
             (frame_len, frame_type, frame_flag, frame_id) = frame_header
-            target_stream = self.get_stream(frame_id)
+
+            try:
+                target_stream = self.get_stream(frame_id)
+            except StreamClosedError:  # if closed error
+
+                if not (frame_type == FrameType.WINDOW_UPDATE or
+                        frame_type == FrameType.PRIORITY):
+                    raise StreamClosedError()
 
             # close connection
             if not target_stream.run_stream(self.rfile, frame_header):

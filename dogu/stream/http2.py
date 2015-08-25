@@ -10,10 +10,12 @@ from dogu.frame.header_frame import HeaderFrame
 from dogu.frame.push_promise_frame import PushPromiseFrame
 from dogu.data_frame_io import DataFrameIO
 from dogu.http2_exception import ProtocolError
-from gevent import spawn
+from gevent import spawn, sleep
 
 
 class StreamHTTP2(Stream):
+
+    INITIAL_WINDOW_SIZE = 65535
 
     @staticmethod
     def is_server_stream_id(stream_id):
@@ -24,6 +26,8 @@ class StreamHTTP2(Stream):
         self.send_headers = list()
         self.request_payload_stream = DataFrameIO()
         self.sending = False
+        self.window_size = StreamHTTP2.INITIAL_WINDOW_SIZE
+        self.send_size = 0
         self.push_enabled = True  # default push is enabled
 
     def send_response(self, code, message=None):
@@ -124,10 +128,32 @@ class StreamHTTP2(Stream):
         return True
 
     def write(self, data, end_stream=False):
+
+        data_len = len(data)
+        left_len = self.window_size - self.send_size
+
+        if data_len > left_len:
+
+            # send data
+            data_frame = DataFrame(self.stream_id)
+            data_frame.data = data[:left_len]
+
+            self.conn.write(data_frame.get_frame_bin())
+            self.conn.flush()
+
+            # re-initialize
+            self.send_size = data_len + left_len
+            data = data[left_len:]
+
+            while self.send_size + data_len > self.window_size:
+                print('wait')
+                sleep(0)  # wait for get flow control
+
         data_frame = DataFrame(self.stream_id, end_stream)
         data_frame.data = data
 
         self.conn.write(data_frame.get_frame_bin())
+        self.send_size += data_len
 
     def recv_frame(self, frame):
         if isinstance(frame, DataFrame):

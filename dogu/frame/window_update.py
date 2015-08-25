@@ -27,7 +27,7 @@ class WindowUpdateFrame(Frame):
         window_size += frame[2] << 8
         window_size += frame[3]
 
-        if not (window_size < 1 or
+        if (window_size < 1 or
                 window_size > WindowUpdateFrame.WINDOW_UPDATE_MAX_SIZE):
             raise ProtocolError()
 
