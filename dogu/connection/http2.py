@@ -10,11 +10,12 @@ from dogu.http2_exception import StreamClosedError, HTTP2Error
 from dogu.frame import Frame, FrameType
 from dogu.frame.goaway_frame import GoawayFrame
 from dogu.logger import logger
-
+from dogu.frame.setting_frame import SettingFrame
 
 class HTTP2Connection(HTTPConnection):
 
     STREAM_HEADER_SIZE = 9
+    DEFAULT_INITIAL_WINDOW_SIZE = 65535
 
     def __init__(
         self,
@@ -37,6 +38,8 @@ class HTTP2Connection(HTTPConnection):
         self.encoder = Encoder()
         self.decoder = Decoder()
         self.last_stream_id = 0
+        self.send_initial_window_size = HTTP2Connection.DEFAULT_INITIAL_WINDOW_SIZE
+        self.recv_initial_window_size = HTTP2Connection.DEFAULT_INITIAL_WINDOW_SIZE
 
         self.stream_dict[0] = StreamHTTP2(
             self,
@@ -75,7 +78,16 @@ class HTTP2Connection(HTTPConnection):
 
         return stream
 
+    def default_setting(self):
+        frame = SettingFrame()
+        frame.set(SettingFrame.SETTINGS_MAX_FRAME_SIZE, 1048576)
+        self.write(frame.get_frame_bin())
+        self.flush()
+
     def run(self):
+
+        self.default_setting()
+
         while True:
             raw_frame_header = self.rfile.read(
                 HTTP2Connection.STREAM_HEADER_SIZE
@@ -86,8 +98,6 @@ class HTTP2Connection(HTTPConnection):
                 return
 
             try:
-                logger.debug('recieve frame %s' % raw_frame_header)
-
                 frame_header = Frame.parse_header(
                     raw_frame_header[:HTTP2Connection.STREAM_HEADER_SIZE]
                 )
@@ -108,5 +118,11 @@ class HTTP2Connection(HTTPConnection):
                 if not target_stream.run_stream(self.rfile, frame_header):
                     break
             except HTTP2Error as e:
-                    goaway = GoawayFrame(frame_id, e.code, e.debug_data)
-                    self.conn.write(goaway.get_frame_bin)
+
+                if self.server_setting['debug']:
+                    import traceback
+                    traceback.format_exc()
+
+                logger.error('Goaway id %d debug data: %s', e.code, e.debug_data)
+                goaway = GoawayFrame(frame_id, e.code, e.debug_data)
+                self.write(goaway.get_frame_bin())

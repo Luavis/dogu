@@ -31,7 +31,7 @@ class WindowUpdateFrame(Frame):
                 window_size > WindowUpdateFrame.WINDOW_UPDATE_MAX_SIZE):
             raise ProtocolError()
 
-        window_frame = WindowUpdateFrame(window_size)
+        window_frame = WindowUpdateFrame(frm_id, window_size)
 
         return window_frame
 

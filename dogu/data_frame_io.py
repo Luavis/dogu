@@ -1,5 +1,6 @@
 
 import io
+from gevent import sleep
 
 
 class DataFrameIO(io.RawIOBase):
@@ -27,17 +28,13 @@ class DataFrameIO(io.RawIOBase):
         was shutdown at the other end.
         """
 
-        b_len = len(b)
-        buf_len = len(self.buf)
-        read_size = 0
+        while not min(len(b), len(self.buf)) == len(b):
+            sleep(0)
 
-        for i in range(b_len):
-            if buf_len - i == 0:
-                return read_size
+        read_size = min(len(b), len(self.buf))
 
-            b[i] = self.buf[0]
-            del self.buf[0]
-            read_size += 1
+        b[0:read_size] = self.buf[0:read_size]
+        del self.buf[0:read_size]
 
         return read_size
 

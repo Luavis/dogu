@@ -12,7 +12,7 @@ def install():
         long_description='Dogu server, Implementation of dogu interace',
         author='Luavis Kang',
         author_email='luaviskang@gmail.com',
-        url='https://github.com/SomaSoma/dogu_interface',
+        url='https://github.com/SomaSoma/dogu',
         classifiers=[
             'Development Status :: 1 - Planning',
             'License :: Freeware',
