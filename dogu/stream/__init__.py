@@ -108,10 +108,10 @@ class Stream(object):
         environ['wsgi.run_once'] = False
         environ['wsgi.url_scheme'] = 'https' if self.conn.use_ssl else 'http'
 
-        # environ['dogu.version'] = (1, 0)
+        environ['dogu.version'] = (1, 0)
 
         # TODO : push handler is None temporarily
-        environ['dogu.push'] = self.push
+        environ['dogu.push'] = self.promise
         environ['dogu.push_enabled'] = self.push_enabled
 
         app = self.conn.get_app_with_host(self.authority if self.authority is not None else environ.get('HTTP_HOST'))

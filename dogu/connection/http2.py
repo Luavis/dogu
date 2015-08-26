@@ -90,10 +90,14 @@ class HTTP2Connection(HTTPConnection):
             try:
                 target_stream = self.get_stream(frame_id)
             except StreamClosedError:  # if closed error
-
-                if not (frame_type == FrameType.WINDOW_UPDATE or
+                if not (frame_type == FrameType.WINDOW_UPDATE and
+                        frame_type == FrameType.RST_STREAM and
                         frame_type == FrameType.PRIORITY):
-                    raise StreamClosedError()
+
+                    print('wrong stream!!!! ', raw_frame_header)
+                    print('==========')
+                    print(self.rfile.read(4))
+                    # raise StreamClosedError()
 
             # close connection
             if not target_stream.run_stream(self.rfile, frame_header):

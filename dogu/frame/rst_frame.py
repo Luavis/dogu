@@ -13,7 +13,7 @@ from dogu.http2_exception import ProtocolError
 class RSTFrame(Frame):
 
     @classmethod
-    def load(cls, frame, header):
+    def load(cls, frame, header, **kargs):
 
         # frame length, type, flag, id
         frm_len, frm_type, frm_flag, frm_id = header

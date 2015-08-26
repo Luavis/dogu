@@ -167,7 +167,21 @@ class StreamHTTP2(Stream):
             if frame.is_end_stream:
                 self.end_stream()
 
-    def promise(self, push_headers):
+    def promise(self, push_headers, app):
+
+        push_promise = PushPromiseFrame(self.stream_id, push_headers)
+        push_stream = self.conn.create_stream()
+
+        push_promise.promised_stream_id = push_stream.stream_id
+        promise = push_promise.get_frame_bin()
+
+        self.conn.write(promise)  # promise push
+        self.conn.flush()
+
+        push_stream.push(push_headers)
+        spawn(push_stream.push, push_headers)
+
+    def push(self, push_headers):
         self.state = 'reserved(local)'
 
         self.recv_headers.extend(push_headers)
@@ -181,29 +195,6 @@ class StreamHTTP2(Stream):
             ),
             self.request_payload_stream  # empty stream
         )
-
-    def push(self, push_headers, app):
-
-        method = None
-        path = None
-
-        for (name, value) in push_headers:
-            if name == ':method':
-                method = value
-            elif name == ':path':
-                path = value
-
-        if method is None or path is None:
-            raise ValueError('Method or path must not be None')
-
-        push_promise = PushPromiseFrame(self.stream_id, push_headers)
-        push_stream = self.conn.create_stream()
-
-        push_promise.promised_stream_id = push_stream.stream_id
-
-        self.conn.write(push_promise.get_frame_bin())  # promise push
-
-        push_stream.promise(push_headers)
 
     def recv_header(self, headers):
         if self.recv_end_header is True:
