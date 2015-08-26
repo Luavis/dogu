@@ -10,6 +10,7 @@ from gevent import spawn
 from gevent import monkey
 from dogu.connection.http1 import HTTP1Connection
 from dogu.connection.http2 import HTTP2Connection
+from dogu.logger import logger
 
 import ssl
 
@@ -100,6 +101,9 @@ class Server(Thread):
             except socket.timeout:
                 self.close_connection(tcp_connection)
                 continue  # close connection
+            except OSError:
+                logger.debug('user close connection')
+                continue
 
             is_http2 = (preface[:PREFACE_SIZE] == PREFACE_CODE)
 
@@ -141,6 +145,8 @@ class Server(Thread):
                     pass
                 except socket.timeout:
                     pass
+                except OSError:
+                    logger.debug('user close connection')
 
             self.close_connection(tcp_connection)  # close connection
 

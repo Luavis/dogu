@@ -7,11 +7,14 @@ from dogu.stream import Stream
 from dogu.frame import Frame
 from dogu.frame.data_frame import DataFrame
 from dogu.frame.header_frame import HeaderFrame
+from dogu.frame.rst_frame import RSTFrame
+from dogu.frame.ping_frame import PingFrame
 from dogu.frame.push_promise_frame import PushPromiseFrame
 from dogu.data_frame_io import DataFrameIO
 from dogu.http2_exception import ProtocolError
+from dogu.http2_error_codes import error_codes
 from gevent import spawn, sleep
-
+from dogu.logger import logger
 
 class StreamHTTP2(Stream):
 
@@ -83,13 +86,18 @@ class StreamHTTP2(Stream):
         self.conn.flush()
 
     def run_app_in_spawn(self, app, environ):
-        data = app(environ, self.start_response)
-        self.flush_data(data)
+        try:
+            data = app(environ, self.start_response)
+            self.flush_data(data)
+        except OSError:
+            logger.debug('user close connection')
 
     def run_app(self, app, environ):
         spawn(self.run_app_in_spawn, app, environ)
 
     def flush_data(self, results):
+        logger.debug('flush data in %d' % self.stream_id)
+
         if results is not None:
             for result in results:
                 self.write(result)
@@ -128,8 +136,8 @@ class StreamHTTP2(Stream):
         return True
 
     def write(self, data, end_stream=False):
-
         data_len = len(data)
+        logger.debug('write in stream %d data length: %d end_stream %d' % (self.stream_id, data_len, end_stream))
         left_len = self.window_size - self.send_size
 
         if data_len > left_len:
@@ -146,7 +154,7 @@ class StreamHTTP2(Stream):
             data = data[left_len:]
 
             while self.send_size + data_len > self.window_size:
-                print('wait')
+                logger.debug('wait for flow control')
                 sleep(0)  # wait for get flow control
 
         data_frame = DataFrame(self.stream_id, end_stream)
@@ -166,19 +174,26 @@ class StreamHTTP2(Stream):
 
             if frame.is_end_stream:
                 self.end_stream()
+        elif isinstance(frame, PingFrame):
+            if not frame.ack:
+                ping = PingFrame(frame.opaque, True)
+                self.conn.write(ping.get_frame_bin())
+        elif isinstance(frame, RSTFrame):
+            self.state = 'closed'
+            logger.error('user reset stream %s' % error_codes[frame.error_code])
 
-    def promise(self, push_headers, app):
+    def promise(self, push_headers):
 
         push_promise = PushPromiseFrame(self.stream_id, push_headers)
         push_stream = self.conn.create_stream()
 
         push_promise.promised_stream_id = push_stream.stream_id
         promise = push_promise.get_frame_bin()
+        logger.debug('send promise stream\n%s' % push_promise)
 
         self.conn.write(promise)  # promise push
         self.conn.flush()
 
-        push_stream.push(push_headers)
         spawn(push_stream.push, push_headers)
 
     def push(self, push_headers):

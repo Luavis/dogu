@@ -6,8 +6,11 @@
 from dogu.connection import HTTPConnection
 from hpack.hpack import Encoder, Decoder
 from dogu.stream.http2 import StreamHTTP2
-from dogu.http2_exception import StreamClosedError
+from dogu.http2_exception import StreamClosedError, HTTP2Error
 from dogu.frame import Frame, FrameType
+from dogu.frame.goaway_frame import GoawayFrame
+from dogu.logger import logger
+
 
 class HTTP2Connection(HTTPConnection):
 
@@ -79,26 +82,31 @@ class HTTP2Connection(HTTPConnection):
             )
 
             if len(raw_frame_header) == 0:  # user close connection
+                logger.debug('user close connection')
                 return
 
-            frame_header = Frame.parse_header(
-                raw_frame_header[:HTTP2Connection.STREAM_HEADER_SIZE]
-            )
-
-            (frame_len, frame_type, frame_flag, frame_id) = frame_header
-
             try:
-                target_stream = self.get_stream(frame_id)
-            except StreamClosedError:  # if closed error
-                if not (frame_type == FrameType.WINDOW_UPDATE or
-                        frame_type == FrameType.RST_STREAM or
-                        frame_type == FrameType.PRIORITY):
+                logger.debug('recieve frame %s' % raw_frame_header)
 
-                    print('wrong stream!!!! ', raw_frame_header)
-                    print('==========')
-                    print(self.rfile.read(4))
-                    raise StreamClosedError()
+                frame_header = Frame.parse_header(
+                    raw_frame_header[:HTTP2Connection.STREAM_HEADER_SIZE]
+                )
 
-            # close connection
-            if not target_stream.run_stream(self.rfile, frame_header):
-                break
+                (frame_len, frame_type, frame_flag, frame_id) = frame_header
+
+                try:
+                    target_stream = self.get_stream(frame_id)
+                except StreamClosedError:  # if closed error
+                    if not (frame_type == FrameType.WINDOW_UPDATE or
+                            frame_type == FrameType.RST_STREAM or
+                            frame_type == FrameType.PRIORITY):
+
+                        logger.debug('User send frame in closed stream(frame_type: %d)', frame_type)
+                        raise StreamClosedError('User send frame in closed stream(frame_type: %d)' % frame_type)
+
+                # close connection
+                if not target_stream.run_stream(self.rfile, frame_header):
+                    break
+            except HTTP2Error as e:
+                    goaway = GoawayFrame(frame_id, e.code, e.debug_data)
+                    self.conn.write(goaway.get_frame_bin)
