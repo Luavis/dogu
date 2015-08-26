@@ -70,7 +70,9 @@ class StreamHTTP1(Stream):
         self.flush_data(data)
 
     def parse_request(self, rfile):
-        raw_requestline = rfile.readline(65537).decode('us-ascii')
+        raw_requestline = rfile.readline(65537).decode(
+            StreamHTTP1.DEFAULT_ENCODING_TYPE
+        )
 
         if len(raw_requestline) == 0:
             return None, True  # user end connection

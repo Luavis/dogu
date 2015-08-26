@@ -43,21 +43,46 @@ class Server(Thread):
 
     def run(self):
         if self.use_ssl:
-            # TODO: it will not work in below 2.7.9 and 3.2
-            ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
+            if hasattr(ssl, 'SSLContext'):
+                if hasattr(ssl, 'PROTOCOL_TLSv1_2'):
+                    # TODO: it will not work in below 2.7.9 and 3.2
+                    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
+                else:
+                    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLSv1)
 
-            # TODO : use alpn when it supported
-            ssl_context.set_npn_protocols(['h2'])
+                if self.setting['use_http2']:
+                    protocol_nego = None
 
-            ssl_context.load_cert_chain(
-                certfile=self.setting['crt_file'],
-                keyfile=self.setting['key_file']
-            )
+                    if hasattr(ssl, 'HAS_NPN'):
+                        if ssl.HAS_NPN:
+                            protocol_nego = 'NPN'
+                            ssl_context.set_npn_protocols(['h2'])
+                    if hasattr(ssl, 'HAS_ALPN'):
+                        if ssl.HAS_ALPN:
+                            protocol_nego = 'ALPN'
+                            ssl_context.set_alpn_protocols(['h2'])
 
-            self.listen_sock = ssl_context.wrap_socket(
-                socket.socket(socket.AF_INET, socket.SOCK_STREAM),
-                server_side=True
-            )
+                    if protocol_nego is None:
+                        logger.info('Unsupport NPN or ALPN')
+
+                ssl_context.load_cert_chain(
+                    certfile=self.setting['crt_file'],
+                    keyfile=self.setting['key_file']
+                )
+
+                self.listen_sock = ssl_context.wrap_socket(
+                    socket.socket(socket.AF_INET, socket.SOCK_STREAM),
+                    server_side=True
+                )
+            else:
+                logger.info('Unsupport NPN or ALPN')
+                self.listen_sock = ssl.wrap_socket(
+                    socket.socket(socket.AF_INET, socket.SOCK_STREAM),
+                    certfile=self.setting['crt_file'],
+                    keyfile=self.setting['key_file'],
+                    ssl_version=ssl.PROTOCOL_TLSv1,
+                    server_side=True
+                )
         else:
             self.listen_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
@@ -71,12 +96,14 @@ class Server(Thread):
         self.create_workers()
 
         while True:
-            conn, addr = self.listen_sock.accept()
+            try:
+                conn, addr = self.listen_sock.accept()
+                if conn is None:
+                    continue
 
-            if conn is None:
-                continue
-
-            self.connection_queue.put((conn, addr))
+                self.connection_queue.put((conn, addr))
+            except ssl.SSLError:
+                logger.debug('user access in tls connection without ssl cert')
 
     def create_workers(self):
         self.connection_queue = Queue()
@@ -171,7 +198,8 @@ def set_server(
         use_ssl=False,
         crt_file="",
         key_file="",
-        debug=False):
+        debug=False,
+        use_http2=True):
     """
     This function is wrapping dogu interface application
     to run with specific settings
@@ -196,6 +224,7 @@ def set_server(
     server_setting['use_ssl'] = use_ssl
     server_setting['crt_file'] = crt_file
     server_setting['key_file'] = key_file
+    server_setting['use_http2'] = use_http2
 
     server_setting['app'] = app
     server_setting['debug'] = debug
