@@ -23,7 +23,6 @@ from dogu.logger import logger
 
 class StreamHTTP2(Stream):
 
-    UPDATE_WINDOW_SIZE_DELTA = 102400
     UPDATE_WINDOW_SIZE = 3145737
     CONNECTION_STREAM_ID = 0x0
 
@@ -118,8 +117,7 @@ class StreamHTTP2(Stream):
 
         if self.is_wait_res:
             self.conn.flush()
-
-        self.state = 'closed'
+            self.state = 'half-closed(remote)'
 
     def run_stream(self, rfile, frame_header):
         (frame_len, frame_type, frame_flag, frame_id) = frame_header
@@ -254,8 +252,6 @@ class StreamHTTP2(Stream):
 
     def recv_data(self, data):
         data_len = len(data)
-        # logger.debug('recv data in stream %d data length: %d' % (self.stream_id, data_len))
-
         left_len = self.recv_window_size - self.recv_size
 
         if data_len > left_len:
@@ -284,8 +280,9 @@ class StreamHTTP2(Stream):
             self.conn.flush()
 
             self.recv_window_size += StreamHTTP2.UPDATE_WINDOW_SIZE
-            sleep(0)
             logger.debug('update window size %d', self.recv_window_size)
+
+        sleep(0)
 
     def end_header(self):
         self.recv_end_header = True
@@ -293,3 +290,6 @@ class StreamHTTP2(Stream):
     def end_stream(self):
         if self.state is 'open':
             self.state = 'half-closed(remote)'
+        elif self.state == 'half-closed(remote)':
+            self.conn.flush()
+            self.state = 'closed'

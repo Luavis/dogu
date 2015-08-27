@@ -10,7 +10,7 @@ from dogu.http2_exception import StreamClosedError, HTTP2Error
 from dogu.frame import Frame, FrameType
 from dogu.frame.goaway_frame import GoawayFrame
 from dogu.logger import logger
-from dogu.frame.setting_frame import SettingFrame
+
 
 class HTTP2Connection(HTTPConnection):
 
@@ -78,16 +78,7 @@ class HTTP2Connection(HTTPConnection):
 
         return stream
 
-    def default_setting(self):
-        frame = SettingFrame()
-        frame.set(SettingFrame.SETTINGS_MAX_FRAME_SIZE, 1048576)
-        self.write(frame.get_frame_bin())
-        self.flush()
-
     def run(self):
-
-        self.default_setting()
-
         while True:
             raw_frame_header = self.rfile.read(
                 HTTP2Connection.STREAM_HEADER_SIZE
