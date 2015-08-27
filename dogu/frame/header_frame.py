@@ -15,8 +15,8 @@
 
 from dogu.frame import (Frame, FrameType)
 from dogu.util import int_to_bytes
-from dogu.hpack.hpack import (Encoder, Decoder)
 from dogu.http2_exception import ProtocolError
+from hpack.hpack import (Encoder, Decoder)
 
 
 class HeaderFrame(Frame):
@@ -48,7 +48,7 @@ class HeaderFrame(Frame):
         end_stream = False
         end_header = False
 
-        header_start_index = 9  # default is payload stat index
+        header_start_index = 0  # default is payload stat index
         header_pad_length = 0
 
         if frm_flag & HeaderFrame.END_STREAM_FLAG is not 0:

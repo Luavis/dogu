@@ -6,16 +6,17 @@
 import socket
 from threading import Thread
 from gevent.queue import Queue
-from gevent import Timeout
 from gevent import spawn
 from gevent import monkey
 from dogu.connection.http1 import HTTP1Connection
+from dogu.connection.http2 import HTTP2Connection
+from dogu.logger import logger
 
 import ssl
 
 
 PREFACE_CODE = b'\x50\x52\x49\x20\x2a\x20\x48\x54\x54\x50\x2f\x32\x2e\x30\x0d\x0a\x0d\x0a\x53\x4d\x0d\x0a\x0d\x0a'
-
+SERVER_PREFACE = b'\x00\x00\x00\x04\x01\x00\x00\x00\x00'
 PREFACE_SIZE = len(PREFACE_CODE)
 
 monkey.patch_all()
@@ -42,21 +43,46 @@ class Server(Thread):
 
     def run(self):
         if self.use_ssl:
-            # TODO: it will not work in below 2.7.9 and 3.2
-            ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
+            if hasattr(ssl, 'SSLContext'):
+                if hasattr(ssl, 'PROTOCOL_TLSv1_2'):
+                    # TODO: it will not work in below 2.7.9 and 3.2
+                    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
+                else:
+                    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLSv1)
 
-            # TODO : use alpn when it supported
-            ssl_context.set_npn_protocols(['h2'])
+                if self.setting['use_http2']:
+                    protocol_nego = None
 
-            ssl_context.load_cert_chain(
-                certfile=self.setting['crt_file'],
-                keyfile=self.setting['key_file']
-            )
+                    if hasattr(ssl, 'HAS_NPN'):
+                        if ssl.HAS_NPN:
+                            protocol_nego = 'NPN'
+                            ssl_context.set_npn_protocols(['h2'])
+                    if hasattr(ssl, 'HAS_ALPN'):
+                        if ssl.HAS_ALPN:
+                            protocol_nego = 'ALPN'
+                            ssl_context.set_alpn_protocols(['h2'])
 
-            self.listen_sock = ssl_context.wrap_socket(
-                socket.socket(socket.AF_INET, socket.SOCK_STREAM),
-                server_side=True
-            )
+                    if protocol_nego is None:
+                        logger.info('Unsupport NPN or ALPN')
+
+                ssl_context.load_cert_chain(
+                    certfile=self.setting['crt_file'],
+                    keyfile=self.setting['key_file']
+                )
+
+                self.listen_sock = ssl_context.wrap_socket(
+                    socket.socket(socket.AF_INET, socket.SOCK_STREAM),
+                    server_side=True
+                )
+            else:
+                logger.info('Unsupport NPN or ALPN')
+                self.listen_sock = ssl.wrap_socket(
+                    socket.socket(socket.AF_INET, socket.SOCK_STREAM),
+                    certfile=self.setting['crt_file'],
+                    keyfile=self.setting['key_file'],
+                    ssl_version=ssl.PROTOCOL_TLSv1,
+                    server_side=True
+                )
         else:
             self.listen_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
@@ -70,12 +96,14 @@ class Server(Thread):
         self.create_workers()
 
         while True:
-            conn, addr = self.listen_sock.accept()
+            try:
+                conn, addr = self.listen_sock.accept()
+                if conn is None:
+                    continue
 
-            if conn is None:
-                continue
-
-            self.connection_queue.put((conn, addr))
+                self.connection_queue.put((conn, addr))
+            except ssl.SSLError:
+                logger.debug('user access in tls connection without ssl cert')
 
     def create_workers(self):
         self.connection_queue = Queue()
@@ -88,6 +116,7 @@ class Server(Thread):
             is_http2 = False
 
             tcp_connection, remote_addr = self.connection_queue.get()
+
             tcp_connection.settimeout(self.setting['keep_alive_timeout'])
 
             rfile = tcp_connection.makefile('rb', self.setting['input_buffer_size'])
@@ -99,38 +128,61 @@ class Server(Thread):
             except socket.timeout:
                 self.close_connection(tcp_connection)
                 continue  # close connection
+            except OSError:
+                logger.debug('user close connection')
+                continue
 
-            is_http2 = (preface[0:PREFACE_SIZE] == PREFACE_CODE)
+            is_http2 = (preface[:PREFACE_SIZE] == PREFACE_CODE)
 
             if is_http2:
                 rfile.read(PREFACE_SIZE)  # clean buffer
+                wfile.write(SERVER_PREFACE)
 
-            connection = HTTP1Connection(
-                is_http2,
-                remote_addr,
-                self.setting,
-                self.app_list,
-                rfile,
-                wfile
-            )
+                connection = HTTP2Connection(
+                    is_http2,
+                    remote_addr,
+                    self.setting,
+                    self.app_list,
+                    rfile,
+                    wfile
+                )
+            else:
+                connection = HTTP1Connection(
+                    is_http2,
+                    remote_addr,
+                    self.setting,
+                    self.app_list,
+                    rfile,
+                    wfile
+                )
 
             if not self.setting['debug']:
                 try:
                     connection.run()
                 except socket.timeout:
-                    pass  # end stream
+                    pass
+                except ssl.SSLError:
+                    pass
                 except:
                     pass  # TODO : stack error log
             else:
                 try:
                     connection.run()
+                except ssl.SSLError:
+                    pass
                 except socket.timeout:
-                    self.close_connection(tcp_connection)
-                    continue  # end stream
+                    pass
+                except OSError:
+                    logger.debug('user close connection')
+
+            self.close_connection(tcp_connection)  # close connection
 
     def close_connection(self, tcp_connection):
-        tcp_connection.shutdown(socket.SHUT_RDWR)
-        tcp_connection.close()
+        try:
+            tcp_connection.shutdown(socket.SHUT_RDWR)
+            tcp_connection.close()
+        except OSError:  # if already closed just pass it
+            pass
 
 def set_server(
         host='127.0.0.1',
@@ -146,7 +198,8 @@ def set_server(
         use_ssl=False,
         crt_file="",
         key_file="",
-        debug=False):
+        debug=False,
+        use_http2=True):
     """
     This function is wrapping dogu interface application
     to run with specific settings
@@ -171,6 +224,7 @@ def set_server(
     server_setting['use_ssl'] = use_ssl
     server_setting['crt_file'] = crt_file
     server_setting['key_file'] = key_file
+    server_setting['use_http2'] = use_http2
 
     server_setting['app'] = app
     server_setting['debug'] = debug
@@ -183,6 +237,8 @@ def start(server_settings):
     server_list = dict()
 
     for server_setting in server_settings:
+
+        logger.info('Run server')
 
         server_id = server_setting['host'] + ':' + str(server_setting['port'])
 

@@ -37,7 +37,7 @@ class DataFrame(Frame):
 
         end_stream = False
 
-        data_start_index = 9  # default is payload stat index
+        data_start_index = 0  # default is payload stat index
         data_pad_length = 0
 
         if frm_flag & DataFrame.END_STREAM_FLAG is not 0:

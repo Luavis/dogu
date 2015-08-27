@@ -5,7 +5,7 @@
 """
 import sys
 
-from dogu.hpack.hpack import Encoder, Decoder
+from hpack.hpack import Encoder, Decoder
 
 
 class HTTPConnection(object):

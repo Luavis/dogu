@@ -52,10 +52,10 @@ class SettingFrame(Frame):
             setting_frame.is_ack = True
 
         if frm_len is not 0:  # parsing setting list
-            index = 9  # first frame payload index
+            index = 0  # first frame payload index
 
             try:  # check for out of index
-                while index - 9 < frm_len:  # index default value was 9
+                while index < frm_len:  # index default value was 9
 
                     setting_id = frame[index] << 8
                     setting_id += frame[index + 1]  # read setting id 16 bit

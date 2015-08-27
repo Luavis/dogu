@@ -68,6 +68,8 @@ class Frame(object):
         from dogu.frame.data_frame import DataFrame
         from dogu.frame.header_frame import HeaderFrame
         from dogu.frame.push_promise_frame import PushPromiseFrame
+        from dogu.frame.rst_frame import RSTFrame
+        from dogu.frame.window_update import WindowUpdateFrame
 
         if header is None:
             header = cls.parse_header(frame)
@@ -79,7 +81,7 @@ class Frame(object):
 
         # check frame length match real size
 
-        if not frm_len + 9 == len(frame):
+        if not frm_len == len(frame):
             raise FrameSizeError()
 
         if frm_type == FrameType.DATA:
@@ -90,6 +92,10 @@ class Frame(object):
             frm_cls = HeaderFrame
         elif frm_type == FrameType.PUSH_PROMISE:
             frm_cls = PushPromiseFrame
+        elif frm_type == FrameType.RST_STREAM:
+            frm_cls = RSTFrame
+        elif frm_type == FrameType.WINDOW_UPDATE:
+            frm_cls = WindowUpdateFrame
         else:
             return None
 

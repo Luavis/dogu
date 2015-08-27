@@ -1,5 +1,5 @@
 """
-    dogu.stream
+    dogu.http1.connection
     ~~~~~~~
 
 """
@@ -13,15 +13,19 @@ class StreamHTTP1(Stream):
     DEFAULT_ENCODING_TYPE = 'iso-8859-1'
     EOL_MARKER = '\r\n'.encode('iso-8859-1')
 
-    def __init__(self, conn, scheme='http', stream_id=0):
-        Stream.__init__(self, conn, scheme, stream_id)
+    def __init__(self, conn, stream_id=0):
+        Stream.__init__(self, conn, stream_id)
+        self.promise = None  # no push handler
 
     def send_response(self, code, message=None):
         self.code = code
         self.message = message
 
         self.conn.wfile.write(
-            (self.http_version + ' ' + code + ' ' + message).encode(StreamHTTP1.DEFAULT_ENCODING_TYPE))
+            (self.http_version + ' ' + code + ' ' + message).encode(
+                StreamHTTP1.DEFAULT_ENCODING_TYPE
+            )
+        )
 
         self.conn.wfile.write(StreamHTTP1.EOL_MARKER)
 
@@ -38,9 +42,10 @@ class StreamHTTP1(Stream):
     def write(self, data):
         self.conn.write(data)
 
-    def flush_data(self, data):
-        if data is not None:
-            self.conn.write(data)
+    def flush_data(self, results):
+        if results is not None:
+            for result in results:
+                self.conn.write(result)
 
         self.conn.flush()
 
@@ -50,7 +55,6 @@ class StreamHTTP1(Stream):
         if request is not None:
             command, path, http_version, headers = request
             self.http_version = http_version  # get HTTP version in requset
-
             self.run_with_dogu(request, rfile)
         else:  # this case probably malformed request
             return False
@@ -60,8 +64,15 @@ class StreamHTTP1(Stream):
         else:
             return True
 
+    def run_app(self, app, environ):
+        data = app(environ, self.start_response)
+
+        self.flush_data(data)
+
     def parse_request(self, rfile):
-        raw_requestline = rfile.readline(65537).decode('us-ascii')
+        raw_requestline = rfile.readline(65537).decode(
+            StreamHTTP1.DEFAULT_ENCODING_TYPE
+        )
 
         if len(raw_requestline) == 0:
             return None, True  # user end connection

@@ -12,22 +12,20 @@ except ImportError:
 
 class Stream(object):
 
-    def __init__(self, conn, scheme='http', stream_id=0):
+    def __init__(self, conn, stream_id=0):
         self.conn = conn
         self.stream_id = stream_id
         self.state = 'idle'
-        self.scheme = scheme
 
         # recv data
         self.recv_end_header = False
-        self.recv_headers = []
+        self.recv_headers = list()
         self.authority = None
-        self.method = 'GET'
-        self.path = '/'
 
         # send data
         self.code = ''
         self.message = ''
+        self.push_enabled = False
 
     def send_response(self, code, message=None):
         self.code = code
@@ -71,7 +69,8 @@ class Stream(object):
         environ['REMOTE_ADDR'] = self.conn.remote_addr
 
         for (name, value) in headers:
-            environ['HTTP_' + name.upper().replace('-', '_')] = value
+            if not name[0] == ':':  # filter psedo header
+                environ['HTTP_' + name.upper().replace('-', '_')] = value
 
         if environ.get('HTTP_CONTENT_LENGTH'):
             environ['CONTENT_LENGTH'] = environ['HTTP_CONTENT_LENGTH']
@@ -85,19 +84,19 @@ class Stream(object):
         else:
             environ['CONTENT_TYPE'] = ''
 
-        environ['HTTP_METHOD'] = command
+        environ['REQUEST_METHOD'] = command
         environ['PROTOCOL_VERSION'] = http_version
         environ['SERVER_NAME'] = self.conn.server_setting['host']
-        environ['SERVER_PORT'] = self.conn.server_setting['port']
+        environ['SERVER_PORT'] = str(self.conn.server_setting['port'])
         environ['SCRIPT_NAME'] = ''
 
         split_path = path.split('?')
 
-        environ['RAW_QUERY_STRING'] = split_path[0]
-        environ['RAW_PATH_INFO'] = split_path[1] if len(split_path) > 1 else ''
+        environ['RAW_PATH_INFO'] = split_path[0]
+        environ['RAW_QUERY_STRING'] = split_path[1] if len(split_path) > 1 else ''
 
-        environ['QUERY_STRING'] = quote(environ['RAW_QUERY_STRING'])
         environ['PATH_INFO'] = quote(environ['RAW_PATH_INFO'])
+        environ['QUERY_STRING'] = quote(environ['RAW_QUERY_STRING'])
 
         environ['wsgi.input'] = input_stream
 
@@ -112,11 +111,12 @@ class Stream(object):
         environ['dogu.version'] = (1, 0)
 
         # TODO : push handler is None temporarily
-        environ['dogu.push'] = None
-        environ['dogu.push_enabled'] = True
+        environ['dogu.push'] = self.promise
+        environ['dogu.push_enabled'] = self.push_enabled
 
         app = self.conn.get_app_with_host(self.authority if self.authority is not None else environ.get('HTTP_HOST'))
 
-        data = app(environ, self.start_response)
+        self.run_app(app, environ)
 
-        self.flush_data(data)
+    def run_app(self, app, environ):
+        pass
