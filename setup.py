@@ -31,7 +31,9 @@ def install():
             'pytest==2.7.2',
             'gevent==1.1b3',
             'hpack==1.1.0',
+            'daemonize==2.3.1',
         ],
+        script="dogu-server"
     )
 
 if __name__ == "__main__":

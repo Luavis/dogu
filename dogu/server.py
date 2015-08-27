@@ -8,6 +8,7 @@ from threading import Thread
 from gevent.queue import Queue
 from gevent import spawn
 from gevent import monkey
+from dogu.frame.setting_frame import SettingFrame
 from dogu.connection.http1 import HTTP1Connection
 from dogu.connection.http2 import HTTP2Connection
 from dogu.logger import logger
@@ -111,6 +112,13 @@ class Server(Thread):
         for i in range(self.setting['workers']):
             spawn(self.process_tcp_connection)
 
+    def default_setting(self):
+        frame = SettingFrame()
+        frame.set(SettingFrame.SETTINGS_INITIAL_WINDOW_SIZE, 16777215)
+        frame.set(SettingFrame.SETTINGS_MAX_FRAME_SIZE, 16777215)
+
+        return frame
+
     def process_tcp_connection(self):
         while True:
             is_http2 = False
@@ -136,7 +144,12 @@ class Server(Thread):
 
             if is_http2:
                 rfile.read(PREFACE_SIZE)  # clean buffer
+                frame = self.default_setting()
+                print(frame.get_frame_bin())
+                wfile.write(frame.get_frame_bin())
                 wfile.write(SERVER_PREFACE)
+
+                wfile.flush()
 
                 connection = HTTP2Connection(
                     is_http2,

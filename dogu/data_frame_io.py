@@ -44,14 +44,9 @@ class DataFrameIO(io.RawIOBase):
         len(b) if not all data could be written.  If the socket is
         non-blocking and no bytes could be written None is returned.
         """
+        self.buf += b
 
-        written_len = 0
-
-        for byte in b:
-            self.buf.append(byte)
-            written_len += 1
-
-        return written_len
+        return len(b)
 
     def readable(self):
 
