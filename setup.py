@@ -14,7 +14,7 @@ def install():
         author_email='luaviskang@gmail.com',
         url='https://github.com/SomaSoma/dogu',
         classifiers=[
-            'Development Status :: 1 - Planning',
+            'Development Status :: 2 - Pre-Alpha',
             'License :: Freeware',
             'Operating System :: POSIX',
             'Operating System :: Microsoft :: Windows',
@@ -33,7 +33,7 @@ def install():
             'hpack==1.1.0',
             'daemonize==2.3.1',
         ],
-        script="dogu-server"
+        scripts=["dogu-server"],
     )
 
 if __name__ == "__main__":
