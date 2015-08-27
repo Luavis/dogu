@@ -282,8 +282,6 @@ class StreamHTTP2(Stream):
             self.recv_window_size += StreamHTTP2.UPDATE_WINDOW_SIZE
             logger.debug('update window size %d', self.recv_window_size)
 
-        sleep(0)
-
     def end_header(self):
         self.recv_end_header = True
 

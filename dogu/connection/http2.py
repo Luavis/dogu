@@ -10,7 +10,7 @@ from dogu.http2_exception import StreamClosedError, HTTP2Error
 from dogu.frame import Frame, FrameType
 from dogu.frame.goaway_frame import GoawayFrame
 from dogu.logger import logger
-
+from gevent import sleep
 
 class HTTP2Connection(HTTPConnection):
 
@@ -108,6 +108,7 @@ class HTTP2Connection(HTTPConnection):
                 # close connection
                 if not target_stream.run_stream(self.rfile, frame_header):
                     break
+                sleep(0)
             except HTTP2Error as e:
 
                 if self.server_setting['debug']:
