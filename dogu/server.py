@@ -238,6 +238,8 @@ def start(server_settings):
 
     for server_setting in server_settings:
 
+        logger.info('Run server')
+
         server_id = server_setting['host'] + ':' + str(server_setting['port'])
 
         server = server_list.get(server_id)
