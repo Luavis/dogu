@@ -145,7 +145,7 @@ class Server(Thread):
             if is_http2:
                 rfile.read(PREFACE_SIZE)  # clean buffer
                 frame = self.default_setting()
-                print(frame.get_frame_bin())
+
                 wfile.write(frame.get_frame_bin())
                 wfile.write(SERVER_PREFACE)
 

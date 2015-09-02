@@ -118,3 +118,6 @@ class HTTP2Connection(HTTPConnection):
                 logger.error('Goaway id %d debug data: %s', e.code, e.debug_data)
                 goaway = GoawayFrame(frame_id, e.code, e.debug_data)
                 self.write(goaway.get_frame_bin())
+
+                print("close connection")
+                return

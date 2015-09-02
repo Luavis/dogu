@@ -6,9 +6,9 @@ def install():
 
     setup(
         name='dogu',
-        version='1.0',
+        version='0.5.2',
         license='MIT',
-        description='Dogu server, Implementation of dogu interace',
+        description='Dogu server, Implementation of dogu interface which is extension of wsgi for HTTP/2.0',
         long_description='Dogu server, Implementation of dogu interace',
         author='Luavis Kang',
         author_email='luaviskang@gmail.com',

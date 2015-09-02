@@ -42,6 +42,7 @@ class StreamHTTP2(Stream):
         self.send_size = 0
         self.recv_size = 0
         self.push_enabled = True  # default push is enabled
+        self.app_event = None
 
     def send_response(self, code, message=None):
         Stream.send_response(self, code, message)
@@ -104,7 +105,7 @@ class StreamHTTP2(Stream):
             logger.debug('user close connection')
 
     def run_app(self, app, environ):
-        spawn(self.run_app_in_spawn, app, environ)
+        self.app_event = spawn(self.run_app_in_spawn, app, environ)
 
     def flush_data(self, results):
         logger.debug('flush data in %d' % self.stream_id)
@@ -120,6 +121,7 @@ class StreamHTTP2(Stream):
             self.state = 'half-closed(remote)'
 
     def run_stream(self, rfile, frame_header):
+
         (frame_len, frame_type, frame_flag, frame_id) = frame_header
         raw_frame_payload = rfile.read(frame_len)
 
@@ -152,10 +154,9 @@ class StreamHTTP2(Stream):
 
     def write(self, data, end_stream=False):
         data_len = len(data)
-        # logger.debug('write in stream %d data length: %d end_stream %d' % (self.stream_id, data_len, end_stream))
 
         left_len = self.send_window_size - self.send_size
-        # logger.debug('send window size: %d left length: %d', self.send_window_size, left_len)
+        logger.debug('send window size: %d left length: %d', self.send_window_size, left_len)
 
         if data_len > left_len:
 
@@ -207,7 +208,8 @@ class StreamHTTP2(Stream):
                 if setting[0] == SettingFrame.SETTINGS_MAX_FRAME_SIZE:
                     self.conn.send_initial_window_size = setting[1]
         elif isinstance(frame, RSTFrame):
-            self.state = 'closed'
+            self.close()
+
             logger.error('user reset stream %s' % error_codes[frame.error_code])
 
     def promise(self, push_headers):
@@ -280,7 +282,6 @@ class StreamHTTP2(Stream):
             self.conn.flush()
 
             self.recv_window_size += StreamHTTP2.UPDATE_WINDOW_SIZE
-            logger.debug('update window size %d', self.recv_window_size)
 
     def end_header(self):
         self.recv_end_header = True
@@ -290,4 +291,11 @@ class StreamHTTP2(Stream):
             self.state = 'half-closed(remote)'
         elif self.state == 'half-closed(remote)':
             self.conn.flush()
-            self.state = 'closed'
+            self.close()
+
+    def close(self):
+        self.state = 'closed'
+        self.request_payload_stream.close()
+
+        if self.app_event is not None:
+                self.app_event.kill()

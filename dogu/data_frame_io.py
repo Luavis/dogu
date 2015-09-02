@@ -14,10 +14,11 @@ class DataFrameIO(io.RawIOBase):
     def __init__(self):
         io.RawIOBase.__init__(self)
         self.buf = bytearray()
+        self._closed = False
 
     @property
     def closed(self):
-        return False
+        return self._closed
 
     def readinto(self, b):
         """Read up to len(b) bytes into the writable buffer *b* and return
@@ -30,6 +31,9 @@ class DataFrameIO(io.RawIOBase):
 
         while not min(len(b), len(self.buf)) == len(b):
             sleep(0)
+
+            if self.closed:
+                return 0
 
         read_size = min(len(b), len(self.buf))
 
@@ -65,4 +69,5 @@ class DataFrameIO(io.RawIOBase):
 
     def close(self):
         io.RawIOBase.close(self)
+        self._closed = True
         self.buf = bytearray()
