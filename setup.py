@@ -6,15 +6,15 @@ def install():
 
     setup(
         name='dogu',
-        version='1.0',
+        version='0.5.2',
         license='MIT',
-        description='Dogu server, Implementation of dogu interace',
+        description='Dogu server, Implementation of dogu interface which is extension of wsgi for HTTP/2.0',
         long_description='Dogu server, Implementation of dogu interace',
         author='Luavis Kang',
         author_email='luaviskang@gmail.com',
         url='https://github.com/SomaSoma/dogu',
         classifiers=[
-            'Development Status :: 1 - Planning',
+            'Development Status :: 2 - Pre-Alpha',
             'License :: Freeware',
             'Operating System :: POSIX',
             'Operating System :: Microsoft :: Windows',
@@ -33,7 +33,7 @@ def install():
             'hpack==1.1.0',
             'daemonize==2.3.1',
         ],
-        script="dogu-server"
+        scripts=["dogu-server"],
     )
 
 if __name__ == "__main__":

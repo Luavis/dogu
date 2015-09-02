@@ -71,6 +71,9 @@ class Stream(object):
         for (name, value) in headers:
             if not name[0] == ':':  # filter psedo header
                 environ['HTTP_' + name.upper().replace('-', '_')] = value
+            else:
+                if name == ':authority':
+                    self.authority = value
 
         if environ.get('HTTP_CONTENT_LENGTH'):
             environ['CONTENT_LENGTH'] = environ['HTTP_CONTENT_LENGTH']
