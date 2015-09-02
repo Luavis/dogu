@@ -34,7 +34,7 @@ class SettingFrame(Frame):
     @classmethod
     def load(cls, frame, header, **kargs):
 
-        logger.debug('recv settings frame %s',  frame)
+        logger.debug('recv settings frame %s', frame)
 
         # frame length, type, flag, id
         frm_len, frm_type, frm_flag, frm_id = header
