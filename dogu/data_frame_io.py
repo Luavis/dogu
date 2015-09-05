@@ -1,7 +1,7 @@
 
 import io
 from gevent import sleep
-
+from gevent.coros import Semaphore
 
 class DataFrameIO(io.RawIOBase):
 
@@ -14,6 +14,8 @@ class DataFrameIO(io.RawIOBase):
     def __init__(self):
         io.RawIOBase.__init__(self)
         self.buf = bytearray()
+        self.target_size = 0
+        self.semaphore = Semaphore()
         self._closed = False
 
     @property
@@ -29,18 +31,15 @@ class DataFrameIO(io.RawIOBase):
         was shutdown at the other end.
         """
 
-        while not min(len(b), len(self.buf)) == len(b):
-            sleep(0)
+        self.target_size = len(b)
 
-            if self.closed:
-                return 0
+        if self.target_size > len(self.buf):
+            self.semaphore.acquire()
 
-        read_size = min(len(b), len(self.buf))
+        b[0:self.target_size] = self.buf[0:self.target_size]
+        del self.buf[0:self.target_size]
 
-        b[0:read_size] = self.buf[0:read_size]
-        del self.buf[0:read_size]
-
-        return read_size
+        return self.target_size
 
     def write(self, b):
         """Write the given bytes or bytearray object *b* to the socket
@@ -48,7 +47,11 @@ class DataFrameIO(io.RawIOBase):
         len(b) if not all data could be written.  If the socket is
         non-blocking and no bytes could be written None is returned.
         """
+
         self.buf += b
+
+        if self.target_size <= len(self.buf):
+            self.semaphore.release()
 
         return len(b)
 

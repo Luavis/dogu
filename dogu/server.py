@@ -122,13 +122,9 @@ class Server(Thread):
     def process_tcp_connection(self):
         while True:
             is_http2 = False
-
             tcp_connection, remote_addr = self.connection_queue.get()
-
             tcp_connection.settimeout(self.setting['keep_alive_timeout'])
-
             rfile = tcp_connection.makefile('rb', self.setting['input_buffer_size'])
-
             wfile = tcp_connection.makefile('wb', self.setting['output_buffer_size'])
 
             try:
