@@ -1,33 +1,72 @@
 #!/usr/bin/env python
 
-from optparse import OptionParser
+# from optparse import OptionParser
+from argparse import ArgumentParser
 from dogu.server import set_server, start
+from operator import xor
+
 try:
     from configparser import ConfigParser
 except ImportError:
     from ConfigParser import ConfigParser
 
-from os.path import isfile
+from os.path import isfile, basename
 
-parser = OptionParser()
-parser.add_option("-a", "--app", dest="application",
-                  help="application file, use it in debuggin application")
-parser.add_option("-i", "--ini", dest="ini",
-                  help="application ini setting")
+__script_name__ = basename(__file__)
+__version__ = "0.5.2"
 
-(options, args) = parser.parse_args()
+SSL_ERROR_MSG = ": error: if you want to enable ssl."
+"please write certification file and key file correctly"
+
+parser = ArgumentParser(description="Dogu server launcher")
+
+parser.add_argument('target', metavar='application or ini file', type=str,
+                    help='Application or ini file which you want to launch with dogu server')
+
+parser.add_argument("--host", dest="host",
+                    help="host to bind(default: 127.0.0.1)", default="127.0.0.1")
+parser.add_argument("-p, --port", dest="port",
+                    type=int, default=2043,
+                    help="port to bind(default 2043)")
+parser.add_argument("-w, --workers", dest="workers", type=int,
+                    help="workers number that you", default=50)
+parser.add_argument("--processor", dest="process", type=int,
+                    help="setting number of processor to run", default=1)
+parser.add_argument("--input-buffer", dest="input_buffer_size",
+                    help="input buffer size", type=int, default=1000)
+parser.add_argument("--output-buffer", dest="output_buffer_size",
+                    help="output buffer size", type=int, default=1000)
+parser.add_argument("--ssl-key", dest="ssl_key",
+                    help="ssl key file path")
+parser.add_argument("--ssl-crt", dest="ssl_crt",
+                    help="ssl certification file path")
+parser.add_argument("--debug", dest="is_debug",
+                    help="run dogu in debug mode", type=bool, default=False)
+parser.add_argument("--http1-only", dest="use_http1",
+                    help="use only HTTP/1.x", type=bool, default=False)
+
+args = parser.parse_args()
+
+
+def print_error(msg):
+    print(__script_name__ + msg)
+    exit(-1)
 
 
 def main():
-    if options.ini is None and options.application is None:
-        parser.print_help()
-        exit(-1)
-    elif options.ini is not None and options.application is not None:
-        parser.print_help()
-        exit(-1)
-    elif options.application is not None:
+    use_ssl = False
+
+    if xor(args.ssl_crt is not None, args.ssl_key is not None):
+        print_error(__script_name__ + SSL_ERROR_MSG)
+    elif args.ssl_crt is not None and args.ssl_key is not None:
+        if isfile(args.ssl_crt) and isfile(args.ssl_key):
+            use_ssl = True
+        else:
+            print_error(__script_name__ + SSL_ERROR_MSG)
+
+    if ':' in args.target:  # check target is application or ini file
         try:
-            module, app_name = options.application.split(':')
+            module, app_name = args.target.split(':')
             app_module = __import__(module)
 
             app = getattr(app_module, app_name)
@@ -36,10 +75,21 @@ def main():
                 raise ValueError('Can not found application')
 
             server_setting = set_server(
+                host=args.host,
+                port=args.port,
+                server_name='default',
                 app=app,
-                debug=True,
-                keep_alive_timeout=40,
-                workers=50
+                workers=args.workers,
+                process=args.process,
+                input_buffer_size=args.input_buffer_size,
+                output_buffer_size=args.output_buffer_size,
+                keep_alive=True,
+                keep_alive_timeout=10,
+                use_ssl=use_ssl,
+                crt_file=args.crt_file,
+                key_file=args.key_file,
+                debug=args.debug,
+                use_http2=not args.use_http1
             )
 
             start([server_setting])
@@ -48,6 +98,12 @@ def main():
         except ValueError as e:
             print('application must be format <module path>:<app variable>')
             print('\t' + str(e))
+    else:
+        config = ConfigParser()
+
+        sections = config.sections()
+
+
 
 if __name__ == '__main__':
     main()
