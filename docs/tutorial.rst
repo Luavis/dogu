@@ -1,20 +1,13 @@
-.. _quickstart-label: 
+.. _tutorial-label: 
 
-Quick Start
+Dogu tutorial
 ===========
 
 Summary
 -------
 
-|  Since dogu is an implementation of dogu-interface, which is an extension of the WSGI, dogu can be used as a replacement of Werkzeug.
+|  Since dogu is an implementation of dogu-interface, which is an extension of the WSGI for HTTP/2, dogu can be used as a replacement of WSGI implementation.
 |  So any WSGI app will run on dogu with slight change.
-
-
-Installation
-------------
-
-**pip install dogu**
-
 
 
 Flask Example
